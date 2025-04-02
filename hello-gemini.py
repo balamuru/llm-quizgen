@@ -32,12 +32,27 @@ def process_with_gemini(source_path, get_text, query, api_key, model_name="gemin
 
         Based on this content, answer the following question:
         {question}
+        Create output in json format with 4 option with each question json following the format {question_format}.
+        Only one option is correct and also provide a hint to the correct answer
+        """
+        q_fmt="""
+            {
+                "question": "What battle was considered the turning point of the war?",
+                "options": {
+                    "a": "The Battle of Bunker Hill",
+                    "b": "The Battle of Yorktown",
+                    "c": "The Battle of Saratoga",
+                    "d": "The Battle of Trenton"
+                },
+                "answer": "c",
+                "hint": "hint to answer"
+            }
         """
         text_content = get_text(source_path)
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
         prompt_template = ChatPromptTemplate.from_template(template=question_template)
         chain = prompt_template | llm | StrOutputParser()
-        return chain.invoke({"file_content": text_content, "question": query})
+        return chain.invoke({"file_content": text_content, "question": query, "question_format":q_fmt})
     except Exception as e:
         print(f"Error processing file: {e}")
         return None

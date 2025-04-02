@@ -4,8 +4,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from PIL import Image
-import pytesseract
+# from PIL import Image
+# import pytesseract
+import easyocr
 
 def interact_with_gemini(prompt_text, api_key, model_name="gemini-1.5-pro"):
     try:
@@ -54,25 +55,14 @@ def process_pdf_with_gemini(pdf_path, query, api_key, model_name="gemini-1.5-pro
 
 
 def process_image_with_gemini(image_path, query, api_key, model_name="gemini-1.5-pro"):
-    """
-    Processes an image file using Gemini via LangChain, answering a query based on the image's text content.
-
-    Args:
-        image_path (str): The path to the image file.
-        query (str): The query related to the image content.
-        api_key (str): The API key for Gemini.
-        model_name (str): The Gemini model to use (default: "gemini-pro").
-
-    Returns:
-        str: The response from Gemini, or None if an error occurred.
-    """
     try:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
 
-        # Extract text from image using pytesseract
-        image = Image.open(image_path)
-        text_content = pytesseract.image_to_string(image)
+        # Extract text from image using easyocr
+        reader = easyocr.Reader(['en'])
+        result = reader.readtext(image_path, detail=0)
+        text_content = " ".join(result)
 
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
 
@@ -95,8 +85,6 @@ def process_image_with_gemini(image_path, query, api_key, model_name="gemini-1.5
         print(f"Error processing image: {e}")
         return None
 
-
-
 if __name__ == "__main__":
     api_key = os.environ.get("GEMINI_API_KEY")
 
@@ -105,10 +93,14 @@ if __name__ == "__main__":
     # if result:
     #     print(result)
 
-    pdf_path = "/home/vinayb/Downloads/revolution.pdf"
-    # pdf_path = "/home/vinayb/Downloads/tea-party.png"
-    # query = "What is the main topic of the PDF?"
     query = "generate a multiple-choice quiz about the contents of this document"
-    pdf_result = process_pdf_with_gemini(pdf_path, query, api_key)
-    if pdf_result:
-        print(pdf_result)
+
+    # pdf_path = "/home/vinayb/Downloads/revolution.pdf"
+    # pdf_result = process_pdf_with_gemini(pdf_path, query, api_key)
+    # if pdf_result:
+    #     print(pdf_result)
+
+    image_path = "/home/vinayb/Downloads/tea-party.png"
+    image_result = process_image_with_gemini(image_path, query, api_key)
+    if image_result:
+        print(image_result)

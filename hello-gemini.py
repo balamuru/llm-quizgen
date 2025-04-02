@@ -4,86 +4,49 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-# from PIL import Image
-# import pytesseract
 import easyocr
+
 
 def interact_with_gemini(prompt_text, api_key, model_name="gemini-1.5-pro"):
     try:
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
-        langchain_prompt = ChatPromptTemplate.from_template(prompt_text)
-        chain = langchain_prompt | llm | StrOutputParser()
-        response = chain.invoke({})
-        return response
+        chain = ChatPromptTemplate.from_template(prompt_text) | llm | StrOutputParser()
+        return chain.invoke({})
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
 
-def process_pdf_with_gemini(pdf_path, query, api_key, model_name="gemini-1.5-pro"):
+def get_pdf_text(pdf_path):
+    documents = PyPDFLoader(pdf_path).load()
+    texts = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(documents)
+    text_content = " ".join([doc.page_content for doc in texts])
+    return text_content
+
+def process_with_gemini(source_path, get_text, query, api_key, model_name="gemini-1.5-pro"):
     try:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
+        question_template = """
+        Here is the content of a PDF:
+        {file_content}
 
+        Based on this content, answer the following question:
+        {question}
+        """
+        text_content = get_text(source_path)
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
-
-        loader = PyPDFLoader(pdf_path)
-        documents = loader.load()
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        texts = text_splitter.split_documents(documents)
-
-        text_content = " ".join([doc.page_content for doc in texts])
-
-        prompt_template = ChatPromptTemplate.from_template(
-            """
-            Here is the content of a PDF:
-            {pdf_content}
-
-            Based on this content, answer the following question:
-            {question}
-            """
-        )
-
+        prompt_template = ChatPromptTemplate.from_template(template=question_template)
         chain = prompt_template | llm | StrOutputParser()
-        response = chain.invoke({"pdf_content": text_content, "question": query})
-
-        return response
-
+        return chain.invoke({"file_content": text_content, "question": query})
     except Exception as e:
-        print(f"Error processing PDF: {e}")
+        print(f"Error processing file: {e}")
         return None
 
+def get_image_text(image_path):
+    reader = easyocr.Reader(['en'])
+    text_content = " ".join(reader.readtext(image_path, detail=0))
+    return text_content
 
-def process_image_with_gemini(image_path, query, api_key, model_name="gemini-1.5-pro"):
-    try:
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set.")
-
-        # Extract text from image using easyocr
-        reader = easyocr.Reader(['en'])
-        result = reader.readtext(image_path, detail=0)
-        text_content = " ".join(result)
-
-        llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
-
-        prompt_template = ChatPromptTemplate.from_template(
-            """
-            Here is the content of an image:
-            {image_content}
-
-            Based on this content, answer the following question:
-            {question}
-            """
-        )
-
-        chain = prompt_template | llm | StrOutputParser()
-        response = chain.invoke({"image_content": text_content, "question": query})
-
-        return response
-
-    except Exception as e:
-        print(f"Error processing image: {e}")
-        return None
 
 if __name__ == "__main__":
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -93,14 +56,12 @@ if __name__ == "__main__":
     # if result:
     #     print(result)
 
-    query = "generate a multiple-choice quiz about the contents of this document"
+    query = "generate a 10 question multiple-choice quiz about the contents of this document, with the answer keys at the end. also generate a short snippet of the relevant answer context with the each answer in the key"
+    file_result = process_with_gemini("/home/vinayb/Downloads/revolution.pdf", get_pdf_text, query, api_key)
+    if file_result:
+        print(file_result)
 
-    # pdf_path = "/home/vinayb/Downloads/revolution.pdf"
-    # pdf_result = process_pdf_with_gemini(pdf_path, query, api_key)
-    # if pdf_result:
-    #     print(pdf_result)
-
-    image_path = "/home/vinayb/Downloads/tea-party.png"
-    image_result = process_image_with_gemini(image_path, query, api_key)
-    if image_result:
-        print(image_result)
+    # image_path = "/home/vinayb/Downloads/tea-party.png"
+    # image_result = process_image_with_gemini(image_path, query, api_key)
+    # if image_result:
+    #     print(image_result)

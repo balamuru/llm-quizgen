@@ -1,14 +1,14 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 import easyocr
 
 app = Flask(__name__)
+
 
 def get_pdf_text(pdf_path):
     documents = PyPDFLoader(pdf_path).load()
@@ -16,12 +16,14 @@ def get_pdf_text(pdf_path):
     text_content = " ".join([doc.page_content for doc in texts])
     return text_content
 
+
 def get_image_text(image_path):
     reader = easyocr.Reader(['en'])
     text_content = " ".join(reader.readtext(image_path, detail=0))
     return text_content
 
-def process_with_gemini(source_path, get_text, query, api_key, model_name="gemini-1.5-pro"):
+
+def process_with_gemini(source_path, get_text, query, api_key, output_type="json", model_name="gemini-1.5-pro"):
     try:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
@@ -51,11 +53,18 @@ def process_with_gemini(source_path, get_text, query, api_key, model_name="gemin
         text_content = get_text(source_path)
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
         prompt_template = ChatPromptTemplate.from_template(template=question_template)
-        chain = prompt_template | llm | JsonOutputParser()
+
+        if output_type == "json":
+            parser = JsonOutputParser()
+        else:
+            parser = StrOutputParser()
+
+        chain = prompt_template | llm | parser
         return chain.invoke({"file_content": text_content, "question": query, "question_format": q_fmt})
     except Exception as e:
         print(f"Error processing file: {e}")
         return None
+
 
 @app.route('/process', methods=['POST'])
 def process_file():
@@ -70,18 +79,23 @@ def process_file():
 
     api_key = os.environ.get("GEMINI_API_KEY")
     query = request.form.get('query', 'generate a multiple-choice quiz about the contents of this document')
+    output_type = request.form.get('output_type', 'json')
 
     if file.filename.lower().endswith('.pdf'):
-        result = process_with_gemini(file_path, get_pdf_text, query, api_key)
+        result = process_with_gemini(file_path, get_pdf_text, query, api_key, output_type)
     else:
-        result = process_with_gemini(file_path, get_image_text, query, api_key)
+        result = process_with_gemini(file_path, get_image_text, query, api_key, output_type)
 
     if result:
-        response = jsonify(result)
-        response.headers['Content-Type'] = 'application/json'
+        if output_type == "json":
+            response = jsonify(result)
+            response.headers['Content-Type'] = 'application/json'
+        else:
+            response = Response(result, content_type='text/plain')
         return response
     else:
         return jsonify({"error": "Error processing file"}), 500
+
 
 # if __name__ == "__main__":
 #     app.run(host='0.0.0.0', port=5000)

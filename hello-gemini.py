@@ -1,14 +1,11 @@
-from flask import Flask, request, jsonify, Response
+import streamlit as st
+import easyocr
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-import easyocr
-
-app = Flask(__name__)
-
 
 def get_pdf_text(pdf_path):
     documents = PyPDFLoader(pdf_path).load()
@@ -16,12 +13,15 @@ def get_pdf_text(pdf_path):
     text_content = " ".join([doc.page_content for doc in texts])
     return text_content
 
-
 def get_image_text(image_path):
     reader = easyocr.Reader(['en'])
     text_content = " ".join(reader.readtext(image_path, detail=0))
     return text_content
 
+def get_file_text(txt_path):
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+        return text
 
 def process_with_gemini(source_path, get_text, query, api_key, output_type="json", model_name="gemini-1.5-pro"):
     try:
@@ -34,7 +34,9 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
         Based on this content, answer the following question:
         {question}
         Create a JSON object  (not markdown) ready to be consumed by a webclient with each question json following the format {question_format}.
-        Only one option is correct and also provide a hint to the correct answer
+        Only one option is correct
+        Provide a reason to justify why the answer is correct
+        Also provide a hint to the correct answer
         # """
         q_fmt = """
             `{
@@ -45,7 +47,8 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
                     "c": "The Battle of Saratoga",
                     "d": "The Battle of Trenton"
                 },
-                "answer": "c",
+                "answer": "c"
+                "reason": "because it was important"
                 "hint": "hint to answer"
             }`
         """
@@ -56,60 +59,50 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
 
         if output_type == "json":
             parser = JsonOutputParser()
-        else:
+        elif output_type == "text":
             parser = StrOutputParser()
+        else:
+            raise TypeError(f"unknown output type {output_type}")
 
         chain = prompt_template | llm | parser
         return chain.invoke({"file_content": text_content, "question": query, "question_format": q_fmt})
     except Exception as e:
-        print(f"Error processing file: {e}")
+        st.error(f"Error processing file: {e}")
         return None
 
+def main():
+    st.title("Quiz Generator with Gemini")
+    st.write("Upload a file and generate a quiz based on its content.")
 
-@app.route('/process', methods=['POST'])
-def process_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No file selected for uploading"}), 400
+    api_key = st.text_input("Enter your GEMINI_API_KEY", type="password")
+    query = st.text_input("Enter your query", "generate a multiple-choice quiz about the contents of this document")
+    output_type = "json"
+    #output_type = st.selectbox("Select output type", ["json", "text"], index=0) # text is not applicable for this app
+    uploaded_file = st.file_uploader("Choose a file", type=["pdf", "jpg", "jpeg", "png", "txt"])
 
-    file_path = os.path.join('/tmp', file.filename)
-    file.save(file_path)
+    if uploaded_file is not None and api_key:
+        file_path = os.path.join("/tmp", uploaded_file.name)
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    query = request.form.get('query', 'generate a multiple-choice quiz about the contents of this document')
-    output_type = request.form.get('output_type', 'json')
-
-    if file.filename.lower().endswith('.pdf'):
-        result = process_with_gemini(file_path, get_pdf_text, query, api_key, output_type)
-    else:
-        result = process_with_gemini(file_path, get_image_text, query, api_key, output_type)
-
-    if result:
-        if output_type == "json":
-            response = jsonify(result)
-            response.headers['Content-Type'] = 'application/json'
+        # very simplistic file type detection logic but should work ok for now
+        if uploaded_file.name.lower().endswith('.pdf'):
+            result = process_with_gemini(file_path, get_pdf_text, query, api_key, output_type)
+        elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+            result = process_with_gemini(file_path, get_image_text, query, api_key, output_type)
+        elif uploaded_file.name.lower().endswith('.txt'):
+            result = process_with_gemini(file_path, get_file_text, query, api_key, output_type)
         else:
-            response = Response(result, content_type='text/plain')
-        return response
-    else:
-        return jsonify({"error": "Error processing file"}), 500
+            st.error("Unsupported file type")
+            return
 
-
-# if __name__ == "__main__":
-#     app.run(host='0.0.0.0', port=5000)
+        if result:
+            if output_type == "json":
+                st.json(result)
+            else:
+                st.text(result)
+        else:
+            st.error("Error processing file")
 
 if __name__ == "__main__":
-    api_key = os.environ.get("GEMINI_API_KEY")
-
-
-    query = "generate a 10 question multiple-choice quiz about the contents of this document, with the answer keys at the end. also generate a short snippet of the relevant answer context with the each answer in the key"
-    file_result = process_with_gemini("/home/vinayb/Downloads/revolution.pdf", get_pdf_text, query, api_key)
-    if file_result:
-        print(file_result)
-
-    # image_path = "/home/vinayb/Downloads/tea-party.png"
-    # image_result = process_image_with_gemini(image_path, query, api_key)
-    # if image_result:
-    #     print(image_result)
+    main()

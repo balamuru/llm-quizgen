@@ -14,3 +14,12 @@ pip install -r requirements.txt
 ```
 1. Define environment variables (in IDE or OS env)
 * `GEMINI_API_KEY`  - Get this from Google AI Studio
+
+
+
+
+## TODO
+* Summarizer
+* Organize quiz by topics
+* Targetted topics within document
+* Video summarizer / quiz

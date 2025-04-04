@@ -77,15 +77,20 @@ def main():
     api_key = st.text_input("Enter your GEMINI_API_KEY", type="password")
     query = st.text_input("Enter your query", "generate a multiple-choice quiz about the contents of this document")
     output_type = "json"
-    #output_type = st.selectbox("Select output type", ["json", "text"], index=0) # text is not applicable for this app
     uploaded_file = st.file_uploader("Choose a file", type=["pdf", "jpg", "jpeg", "png", "txt"])
 
-    if uploaded_file is not None and api_key:
+    if 'questions' not in st.session_state:
+        st.session_state.questions = []
+    if 'answers' not in st.session_state:
+        st.session_state.answers = {}
+    if 'submitted' not in st.session_state:
+        st.session_state.submitted = {}
+
+    if uploaded_file is not None and api_key and not st.session_state.questions:
         file_path = os.path.join("/tmp", uploaded_file.name)
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        # very simplistic file type detection logic but should work ok for now
         if uploaded_file.name.lower().endswith('.pdf'):
             result = process_with_gemini(file_path, get_pdf_text, query, api_key, output_type)
         elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -97,12 +102,28 @@ def main():
             return
 
         if result:
-            if output_type == "json":
-                st.json(result)
-            else:
-                st.text(result)
+            st.session_state.questions = result
+            st.session_state.answers = {i: None for i in range(len(result))}
+            st.session_state.submitted = {i: False for i in range(len(result))}
         else:
             st.error("Error processing file")
+
+    if st.session_state.questions:
+        for i, question in enumerate(st.session_state.questions):
+            st.write(f"**Question {i+1}:** {question['question']}")
+            options = list(question['options'].items())
+            selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}", index=None)
+            if st.button(f"Submit Answer {i+1}", key=f"submit{i}") and not st.session_state.submitted[i]:
+                st.session_state.answers[i] = selected_option[0]
+                st.session_state.submitted[i] = True
+                if st.session_state.answers[i] == question['answer']:
+                    st.write("Correct!")
+                else:
+                    st.write(f"Incorrect! The correct answer is {question['answer']}")
+                st.write(f"**Reason:** {question['reason']}")
+
+        correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
+        st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
 
 if __name__ == "__main__":
     main()

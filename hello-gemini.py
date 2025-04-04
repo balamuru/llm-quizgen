@@ -75,7 +75,7 @@ def main():
     st.write("Upload a file and generate a quiz based on its content.")
 
     api_key = st.text_input("Enter your GEMINI_API_KEY", type="password")
-    query = st.text_input("Enter your query", "generate a multiple-choice quiz about the contents of this document")
+    query = st.text_input("Enter your query", "generate a 10 question multiple-choice quiz about the contents of this document")
     output_type = "json"
     uploaded_file = st.file_uploader("Choose a file", type=["pdf", "jpg", "jpeg", "png", "txt"])
 

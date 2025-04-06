@@ -85,6 +85,10 @@ def main():
         st.session_state.answers = {}
     if 'submitted' not in st.session_state:
         st.session_state.submitted = {}
+    if 'results' not in st.session_state:
+        st.session_state.results = {}
+    if 'reasons' not in st.session_state:
+        st.session_state.reasons = {}
 
     if uploaded_file is not None and api_key and not st.session_state.questions:
         file_path = os.path.join("/tmp", uploaded_file.name)
@@ -105,22 +109,31 @@ def main():
             st.session_state.questions = result
             st.session_state.answers = {i: None for i in range(len(result))}
             st.session_state.submitted = {i: False for i in range(len(result))}
+            st.session_state.reasons = {i: "" for i in range(len(result))}
         else:
             st.error("Error processing file")
 
     if st.session_state.questions:
         for i, question in enumerate(st.session_state.questions):
+            st.write('***')
             st.write(f"**Question {i+1}:** {question['question']}")
             options = list(question['options'].items())
             selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}", index=None)
-            if st.button(f"Submit Answer {i+1}", key=f"submit{i}") and not st.session_state.submitted[i]:
-                st.session_state.answers[i] = selected_option[0]
-                st.session_state.submitted[i] = True
-                if st.session_state.answers[i] == question['answer']:
-                    st.write("Correct!")
+            if st.button(f"Submit Answer {i+1}", key=f"submit{i}"):
+                if not st.session_state.submitted[i]:
+                    st.session_state.answers[i] = selected_option[0]
+                    st.session_state.submitted[i] = True
+                    if st.session_state.answers[i] == question['answer']:
+                        st.session_state.results[i] = "Correct"
+                        st.write(st.session_state.results[i])
+                    else:
+                        st.session_state.results[i] = f"Incorrect! The correct answer is {question['answer']}"
+                        st.session_state.reasons[i] = question['reason']
+                        st.write(st.session_state.results[i])
+                        st.write(f"**Reason:** {st.session_state.reasons[i]}")
                 else:
-                    st.write(f"Incorrect! The correct answer is {question['answer']}")
-                st.write(f"**Reason:** {question['reason']}")
+                    if st.session_state.results[i] != "Correct":
+                        st.write(f"**Reason:** {st.session_state.reasons[i]}")
 
         correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
         st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")

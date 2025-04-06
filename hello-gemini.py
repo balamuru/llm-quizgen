@@ -118,7 +118,7 @@ def main():
             st.write('***')
             st.write(f"**Question {i+1}:** {question['question']}")
             options = list(question['options'].items())
-            selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}")
+            selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}, index=None)")
             if st.button(f"Submit Answer {i+1}", key=f"submit{i}"):
                 if not st.session_state.submitted[i]:
                     st.session_state.answers[i] = selected_option[0]
@@ -135,18 +135,17 @@ def main():
                     if st.session_state.results[i] != "Correct":
                         st.write(f"**Reason:** {st.session_state.reasons[i]}")
 
+        st.write("***")
         correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
         st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
-
-#         iterate over all the questions and answers when all the questions have been answered
         st.write("***")
         st.write("Analysis")
         if all(st.session_state.submitted.values()):
             for i, question in enumerate(st.session_state.questions):
                 if st.session_state.answers[i] != question['answer']:
                     st.write(f"**Question {i+1}:** {question['question']}")
-                    st.write(f"**Your Answer:** {st.session_state.answers[i]}")
-                    st.write(f"**Correct Answer:** {question['answer']}")
+                    st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
+                    st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
                     st.write(f"**Reason:** {question['reason']}")
 
 

@@ -7,23 +7,42 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 
-def get_pdf_text(pdf_path):
+def get_pdf_text(pdf_path, api_key, model_name):
     documents = PyPDFLoader(pdf_path).load()
     texts = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(documents)
     text_content = " ".join([doc.page_content for doc in texts])
     return text_content
 
-def get_image_text(image_path):
+def get_image_text(image_path, api_key, model_name):
     reader = easyocr.Reader(['en'])
     text_content = " ".join(reader.readtext(image_path, detail=0))
     return text_content
 
-def get_file_text(txt_path):
+def get_file_text(txt_path, api_key, model_name):
     with open(txt_path, 'r', encoding='utf-8') as f:
         text = f.read()
         return text
 
-def process_with_gemini(source_path, get_text, query, api_key, output_type="json", model_name="gemini-1.5-pro"):
+def get_topic_text(topic, api_key, model_name):
+    try:
+        if not api_key:
+            raise ValueError("API key is required.")
+
+        prompt_template = ChatPromptTemplate.from_template(
+            template="Provide detailed information about the topic: {topic}"
+        )
+
+        llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
+        parser = StrOutputParser()
+
+        chain = prompt_template | llm | parser
+        detailed_text = chain.invoke({"topic": topic})
+
+        return detailed_text
+    except Exception as e:
+        return f"Error generating topic text: {e}"
+
+def process_with_gemini(source_path, get_text, api_key, topic="document", output_type="json", model_name="gemini-1.5-pro"):
     try:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
@@ -32,12 +51,13 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
         {file_content}
 
         Based on this content, answer the following question:
-        {question}
+        generate a 10 question multiple-choice quiz about {topic}
         Create a JSON object  (not markdown) ready to be consumed by a webclient with each question json following the format {question_format}.
         Only one option is correct
         Provide a reason to justify why the answer is correct
         Also provide a hint to the correct answer
-        # """
+        """
+
         q_fmt = """
             `{
                 "question": "What battle was considered the turning point of the war?",
@@ -53,7 +73,7 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
             }`
         """
 
-        text_content = get_text(source_path)
+        text_content = get_text(source_path, api_key, model_name)
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
         prompt_template = ChatPromptTemplate.from_template(template=question_template)
 
@@ -65,7 +85,7 @@ def process_with_gemini(source_path, get_text, query, api_key, output_type="json
             raise TypeError(f"unknown output type {output_type}")
 
         chain = prompt_template | llm | parser
-        return chain.invoke({"file_content": text_content, "question": query, "question_format": q_fmt})
+        return chain.invoke({"file_content": text_content, "topic": topic, "question_format": q_fmt})
     except Exception as e:
         st.error(f"Error processing file: {e}")
         return None
@@ -75,7 +95,7 @@ def main():
     st.write("Upload a file and generate a quiz based on its content.")
 
     api_key = st.text_input("Enter your GEMINI_API_KEY", type="password")
-    query = st.text_input("Enter your query", "generate a 2 question multiple-choice quiz about the contents of this document")
+    topic = st.text_input("Enter Specific Topic, if any")
     output_type = "json"
     uploaded_file = st.file_uploader("Choose a file", type=["pdf", "jpg", "jpeg", "png", "txt"])
 
@@ -90,20 +110,28 @@ def main():
     if 'reasons' not in st.session_state:
         st.session_state.reasons = {}
 
-    if uploaded_file is not None and api_key and not st.session_state.questions:
-        file_path = os.path.join("/tmp", uploaded_file.name)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
 
-        if uploaded_file.name.lower().endswith('.pdf'):
-            result = process_with_gemini(file_path, get_pdf_text, query, api_key, output_type)
-        elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
-            result = process_with_gemini(file_path, get_image_text, query, api_key, output_type)
-        elif uploaded_file.name.lower().endswith('.txt'):
-            result = process_with_gemini(file_path, get_file_text, query, api_key, output_type)
+    submitted = st.button("Submit")
+    if submitted and api_key and not st.session_state.questions:
+        if uploaded_file is not None:
+            file_path = os.path.join("/tmp", uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            if uploaded_file.name.lower().endswith('.pdf'):
+                result = process_with_gemini(file_path, get_pdf_text, api_key, topic, output_type)
+            elif uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                result = process_with_gemini(file_path, get_image_text, api_key, topic, output_type)
+            elif uploaded_file.name.lower().endswith('.txt'):
+                result = process_with_gemini(file_path, get_file_text, api_key, topic, output_type)
+            else:
+                st.error("Unsupported file type")
+                return
         else:
-            st.error("Unsupported file type")
-            return
+            if not topic:
+                st.error("Topic is mandatory when no file is uploaded", )
+
+            result = process_with_gemini(None, get_topic_text, api_key, topic, output_type)
 
         if result:
             st.session_state.questions = result
@@ -119,7 +147,7 @@ def main():
             st.write(f"**Question {i+1}:** {question['question']}")
             options = list(question['options'].items())
             selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}, index=None)")
-            if st.button(f"Submit Answer {i+1}", key=f"submit{i}"):
+            if st.button(f"Submit Answer {i+1}", key=f"submit{i}", disabled=st.session_state.submitted[i]):
                 if not st.session_state.submitted[i]:
                     st.session_state.answers[i] = selected_option[0]
                     st.session_state.submitted[i] = True
@@ -139,10 +167,11 @@ def main():
         correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
         st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
         st.write("***")
-        st.write("Analysis")
+        st.write("Test Analysis")
         if all(st.session_state.submitted.values()):
             for i, question in enumerate(st.session_state.questions):
                 if st.session_state.answers[i] != question['answer']:
+                    st.write("***")
                     st.write(f"**Question {i+1}:** {question['question']}")
                     st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
                     st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")

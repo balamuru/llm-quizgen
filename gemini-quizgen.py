@@ -189,7 +189,7 @@ def main():
                 return
         else:
             if not topic:
-                st.error("Topic is mandatory when no file is uploaded", )
+                st.error("Topic is mandatory when no file is uploaded")
 
             result = process_with_gemini(None, get_topic_text, api_key, topic, output_type)
 
@@ -202,26 +202,27 @@ def main():
             st.error("Error processing file")
 
     if st.session_state.questions:
+        st.progress(sum(st.session_state.submitted.values()) / len(st.session_state.questions))
+
         for i, question in enumerate(st.session_state.questions):
-            st.write('***')
-            st.write(f"**Question {i+1}:** {question['question']}")
-            options = list(question['options'].items())
-            selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}, index=None)")
-            if st.button(f"Submit Answer {i+1}", key=f"submit{i}", disabled=st.session_state.submitted[i]):
-                if not st.session_state.submitted[i]:
+            with st.form(key=f"form_{i}"):
+                st.write('***')
+                st.write(f"**Question {i+1}:** {question['question']}")
+                options = list(question['options'].items())
+                selected_option = st.radio(f"Select your answer for Question {i+1}", options, format_func=lambda x: x[1], key=f"q{i}")
+                submit_answer = st.form_submit_button(f"Submit Answer {i+1}")
+
+                if submit_answer and not st.session_state.submitted[i]:
                     st.session_state.answers[i] = selected_option[0]
                     st.session_state.submitted[i] = True
                     if st.session_state.answers[i] == question['answer']:
                         st.session_state.results[i] = "Correct"
-                        st.write(st.session_state.results[i])
+                        st.success(st.session_state.results[i])
                     else:
                         st.session_state.results[i] = f"Incorrect! The correct answer is {question['answer']}"
                         st.session_state.reasons[i] = question['reason']
-                        st.write(st.session_state.results[i])
-                        st.write(f"**Reason:** {st.session_state.reasons[i]}")
-                else:
-                    if st.session_state.results[i] != "Correct":
-                        st.write(f"**Reason:** {st.session_state.reasons[i]}")
+                        st.error(st.session_state.results[i])
+                        st.info(f"**Reason:** {st.session_state.reasons[i]}")
 
         if all(st.session_state.submitted.values()):
             st.write("***")
@@ -237,6 +238,7 @@ def main():
                     st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
                     st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
                     st.write(f"**Reason:** {question['reason']}")
+
 
 if __name__ == "__main__":
     main()

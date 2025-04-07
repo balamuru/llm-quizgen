@@ -223,18 +223,20 @@ def main():
                     if st.session_state.results[i] != "Correct":
                         st.write(f"**Reason:** {st.session_state.reasons[i]}")
 
-        st.write("***")
-        correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
-        st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
-        st.write("***")
-        st.write("Test Analysis")
-        for i, question in enumerate(st.session_state.questions):
-            if st.session_state.answers[i] != question['answer']:
-                st.write("***")
-                st.write(f"**Question {i+1}:** {question['question']}")
-                st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
-                st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
-                st.write(f"**Reason:** {question['reason']}")
+        if all(st.session_state.submitted.values()):
+            st.write("***")
+            correct_answers = sum(1 for i, question in enumerate(st.session_state.questions) if st.session_state.answers[i] == question['answer'])
+            st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
+            st.write("***")
+
+            st.write("Test Analysis")
+            for i, question in enumerate(st.session_state.questions):
+                if st.session_state.answers[i] != question['answer']:
+                    st.write("***")
+                    st.write(f"**Question {i+1}:** {question['question']}")
+                    st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
+                    st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
+                    st.write(f"**Reason:** {question['reason']}")
 
 if __name__ == "__main__":
     main()

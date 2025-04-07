@@ -8,22 +8,66 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 
 def get_pdf_text(pdf_path, api_key, model_name):
+    """
+    Extract text content from a PDF file.
+
+    Args:
+        pdf_path (str): Path to the PDF file.
+        api_key (str): API key for authentication.
+        model_name (str): Name of the model to use.
+
+    Returns:
+        str: Extracted text content from the PDF.
+    """
     documents = PyPDFLoader(pdf_path).load()
     texts = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200).split_documents(documents)
     text_content = " ".join([doc.page_content for doc in texts])
     return text_content
 
 def get_image_text(image_path, api_key, model_name):
+    """
+    Extract text content from an image file.
+
+    Args:
+        image_path (str): Path to the image file.
+        api_key (str): API key for authentication.
+        model_name (str): Name of the model to use.
+
+    Returns:
+        str: Extracted text content from the image.
+    """
     reader = easyocr.Reader(['en'])
     text_content = " ".join(reader.readtext(image_path, detail=0))
     return text_content
 
 def get_file_text(txt_path, api_key, model_name):
+    """
+    Extract text content from a text file.
+
+    Args:
+        txt_path (str): Path to the text file.
+        api_key (str): API key for authentication.
+        model_name (str): Name of the model to use.
+
+    Returns:
+        str: Extracted text content from the text file.
+    """
     with open(txt_path, 'r', encoding='utf-8') as f:
         text = f.read()
         return text
 
 def get_topic_text(topic, api_key, model_name):
+    """
+    Generate detailed information about a given topic using the specified model.
+
+    Args:
+        topic (str): The topic to generate information about.
+        api_key (str): API key for authentication.
+        model_name (str): Name of the model to use.
+
+    Returns:
+        str: Generated detailed information about the topic.
+    """
     try:
         if not api_key:
             raise ValueError("API key is required.")
@@ -43,6 +87,20 @@ def get_topic_text(topic, api_key, model_name):
         return f"Error generating topic text: {e}"
 
 def process_with_gemini(source_path, get_text, api_key, topic="document", output_type="json", model_name="gemini-1.5-pro"):
+    """
+    Process a file or topic with the Gemini model to generate a multiple-choice quiz.
+
+    Args:
+        source_path (str): Path to the source file.
+        get_text (function): Function to extract text from the source file.
+        api_key (str): API key for authentication.
+        topic (str): Specific topic for the quiz (default is "document").
+        output_type (str): Output type, either "json" or "text" (default is "json").
+        model_name (str): Name of the model to use (default is "gemini-1.5-pro").
+
+    Returns:
+        dict or str: Generated quiz in JSON format or as a plain text string.
+    """
     try:
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable not set.")
@@ -91,6 +149,9 @@ def process_with_gemini(source_path, get_text, api_key, topic="document", output
         return None
 
 def main():
+    """
+    Main function to run the Streamlit application for generating quizzes with Gemini.
+    """
     st.title("Quiz Generator with Gemini")
     st.write("Upload a file and generate a quiz based on its content.")
 
@@ -109,7 +170,6 @@ def main():
         st.session_state.results = {}
     if 'reasons' not in st.session_state:
         st.session_state.reasons = {}
-
 
     submitted = st.button("Submit")
     if submitted and api_key and not st.session_state.questions:
@@ -168,15 +228,13 @@ def main():
         st.write(f"**Score:** {correct_answers} / {len(st.session_state.questions)}")
         st.write("***")
         st.write("Test Analysis")
-        if all(st.session_state.submitted.values()):
-            for i, question in enumerate(st.session_state.questions):
-                if st.session_state.answers[i] != question['answer']:
-                    st.write("***")
-                    st.write(f"**Question {i+1}:** {question['question']}")
-                    st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
-                    st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
-                    st.write(f"**Reason:** {question['reason']}")
-
+        for i, question in enumerate(st.session_state.questions):
+            if st.session_state.answers[i] != question['answer']:
+                st.write("***")
+                st.write(f"**Question {i+1}:** {question['question']}")
+                st.write(f"**Your Answer:** {st.session_state.answers[i]} - {question['options'][st.session_state.answers[i]]}")
+                st.write(f"**Correct Answer:** {question['answer']} - {question['options'][question['answer']]}")
+                st.write(f"**Reason:** {question['reason']}")
 
 if __name__ == "__main__":
     main()

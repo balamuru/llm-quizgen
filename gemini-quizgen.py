@@ -171,7 +171,18 @@ def main():
     if 'reasons' not in st.session_state:
         st.session_state.reasons = {}
 
-    submitted = st.button("Submit")
+    submitted = st.button("Generate Quiz")
+    reset = st.button("Reset Input")
+
+    if reset:
+        st.session_state.questions = []
+        st.session_state.answers = {}
+        st.session_state.submitted = {}
+        st.session_state.results = {}
+        st.session_state.reasons = {}
+        topic = None
+        uploaded_file = None
+
     if submitted and api_key and not st.session_state.questions:
         if uploaded_file is not None:
             file_path = os.path.join("/tmp", uploaded_file.name)
